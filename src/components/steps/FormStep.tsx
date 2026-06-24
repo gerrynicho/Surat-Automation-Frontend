@@ -322,36 +322,38 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 					<div className="flex flex-col gap-3">
 						<p className="text-sm font-medium text-gray-700">Peserta</p>
 						{form.participants.map((p, i) => (
-							<div key={i} className="grid grid-cols-[1fr_7rem_1fr_auto] gap-2">
-								<input
-									type="text"
-									value={p.nama}
-									onChange={(e) => setParticipant(i, "nama", e.target.value)}
-									required
-									placeholder="Nama"
-									className={inputCls}
-								/>
-								<input
-									type="text"
-									value={p.nrp}
-									onChange={(e) => setParticipant(i, "nrp", e.target.value)}
-									required
-									placeholder="NRP"
-									className={inputCls}
-								/>
-								<input
-									type="text"
-									value={p.jurusan}
-									onChange={(e) => setParticipant(i, "jurusan", e.target.value)}
-									required
-									placeholder="Jurusan"
-									className={inputCls}
-								/>
+							<div key={i} className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_7rem_1fr_auto]">
+								<div className="flex flex-col gap-2 sm:contents">
+									<input
+										type="text"
+										value={p.nama}
+										onChange={(e) => setParticipant(i, "nama", e.target.value)}
+										required
+										placeholder="Nama"
+										className={inputCls}
+									/>
+									<input
+										type="text"
+										value={p.nrp}
+										onChange={(e) => setParticipant(i, "nrp", e.target.value)}
+										required
+										placeholder="NRP"
+										className={inputCls}
+									/>
+									<input
+										type="text"
+										value={p.jurusan}
+										onChange={(e) => setParticipant(i, "jurusan", e.target.value)}
+										required
+										placeholder="Jurusan"
+										className={inputCls}
+									/>
+								</div>
 								<button
 									type="button"
 									onClick={() => removeParticipant(i)}
 									disabled={form.participants.length === 1}
-									className="rounded-lg border border-gray-300 px-2.5 text-gray-400 disabled:opacity-30 hover:text-red-500"
+									className="self-start rounded-lg border border-gray-300 px-2.5 py-2.5 text-gray-400 disabled:opacity-30 hover:text-red-500"
 								>
 									✕
 								</button>

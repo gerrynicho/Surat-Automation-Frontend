@@ -45,7 +45,7 @@ export default function SuratFormFlow() {
 		<>
 			{showModal && <ApiKeyModal onSuccess={() => setShowModal(false)} />}
 
-			<div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
+			<div className="w-full max-w-2xl rounded-2xl bg-white p-4 sm:p-8 shadow-sm border border-gray-100">
 				{/* Header */}
 				<div className="mb-6">
 					<h1 className="text-xl font-semibold text-gray-900">
