@@ -11,10 +11,30 @@ import type {
 	SuratMetadataResponse,
 } from "@/types/api";
 
+let kepengurusanCache: string[] | null = null;
+
 const BULAN_OPTIONS = [
 	"I", "II", "III", "IV", "V", "VI",
 	"VII", "VIII", "IX", "X", "XI", "XII",
 ];
+
+const MONTH_NAME_TO_ROMAN: Record<string, string> = {
+	januari: "I", februari: "II", maret: "III", april: "IV",
+	mei: "V", juni: "VI", juli: "VII", agustus: "VIII",
+	september: "IX", oktober: "X", november: "XI", desember: "XII",
+};
+
+const ROMAN_TO_MONTH_NAME: Record<string, string> = Object.fromEntries(
+	Object.entries(MONTH_NAME_TO_ROMAN).map(([name, roman]) => [roman, name])
+);
+
+function detectMonthFromTanggal(tanggal: string): string | null {
+	const lower = tanggal.toLowerCase();
+	for (const [name, roman] of Object.entries(MONTH_NAME_TO_ROMAN)) {
+		if (lower.includes(name)) return roman;
+	}
+	return null;
+}
 
 interface Props {
 	onSuccess: (result: CreateSuratResponse) => void;
@@ -24,11 +44,13 @@ interface Props {
 const emptyParticipant = (): Participant => ({ nama: "", nrp: "", jurusan: "" });
 
 export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
-	const [kepengurusanList, setKepengurusanList] = useState<string[]>([]);
+	const [kepengurusanList, setKepengurusanList] = useState<string[]>(kepengurusanCache ?? []);
+	const [loadingKepengurusan, setLoadingKepengurusan] = useState(kepengurusanCache === null);
 	const [latestSurat, setLatestSurat] = useState<SuratMetadataResponse | null>(null);
 	const [loadingLatest, setLoadingLatest] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
+	const [bulanError, setBulanError] = useState("");
 
 	const [form, setForm] = useState<CreateSuratRequest>({
 		nama_kepengurusan: "",
@@ -45,10 +67,14 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 	});
 
 	useEffect(() => {
+		if (kepengurusanCache !== null) return;
 		getKepengurusanList().then((res) => {
 			if (res.OK) {
-				setKepengurusanList((res.Kind as { kepengurusan: string[] }).kepengurusan);
+				const list = (res.Kind as { kepengurusan: string[] }).kepengurusan;
+				kepengurusanCache = list;
+				setKepengurusanList(list);
 			}
+			setLoadingKepengurusan(false);
 		});
 	}, []);
 
@@ -64,7 +90,26 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 	}
 
 	function setMeta(field: string, value: string) {
-		setForm((f) => ({ ...f, metadata: { ...f.metadata, [field]: value } }));
+		setForm((f) => {
+			const next = { ...f, metadata: { ...f.metadata, [field]: value } };
+			if (field === "tanggal_pengajuan") {
+				const detected = detectMonthFromTanggal(value);
+				if (detected) {
+					next.metadata.bulan = detected;
+					setBulanError("");
+				}
+			}
+			if (field === "bulan") {
+				const detected = detectMonthFromTanggal(f.metadata.tanggal_pengajuan);
+				if (detected && detected !== value) {
+					const expected = ROMAN_TO_MONTH_NAME[detected];
+					setBulanError(`Bulan tidak sesuai dengan tanggal pengajuan (seharusnya ${value === "" ? "—" : value} → ${expected})`);
+				} else {
+					setBulanError("");
+				}
+			}
+			return next;
+		});
 	}
 
 	function setData(field: string, value: string | boolean) {
@@ -94,6 +139,12 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
 		setError("");
+		const detected = detectMonthFromTanggal(form.metadata.tanggal_pengajuan);
+		if (detected && form.metadata.bulan && detected !== form.metadata.bulan) {
+			const expected = ROMAN_TO_MONTH_NAME[detected];
+			setBulanError(`Bulan tidak sesuai — tanggal pengajuan mengandung "${expected}" tapi bulan dipilih ${form.metadata.bulan}`);
+			return;
+		}
 		setSubmitting(true);
 		const res = await createSurat(form);
 		setSubmitting(false);
@@ -110,17 +161,23 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 			{/* Kepengurusan */}
 			<div className="flex flex-col gap-1.5">
 				<label className="text-sm font-medium text-gray-700">Kepengurusan</label>
-				<select
-					value={form.nama_kepengurusan}
-					onChange={(e) => handleKepengurusanChange(e.target.value)}
-					required
-					className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-700 focus:ring-1 focus:ring-gray-700"
-				>
-					<option value="">— Pilih kepengurusan —</option>
-					{kepengurusanList.map((k) => (
-						<option key={k} value={k}>{k}</option>
-					))}
-				</select>
+				{loadingKepengurusan ? (
+					<div className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 animate-pulse">
+						<div className="h-4 w-48 rounded bg-gray-300" />
+					</div>
+				) : (
+					<select
+						value={form.nama_kepengurusan}
+						onChange={(e) => handleKepengurusanChange(e.target.value)}
+						required
+						className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-700 focus:ring-1 focus:ring-gray-700"
+					>
+						<option value="">— Pilih kepengurusan —</option>
+						{kepengurusanList.map((k) => (
+							<option key={k} value={k}>{k}</option>
+						))}
+					</select>
+				)}
 			</div>
 
 			{/* Latest surat preview */}
@@ -156,13 +213,14 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 								value={form.metadata.bulan}
 								onChange={(e) => setMeta("bulan", e.target.value)}
 								required
-								className={inputCls}
+								className={`${inputCls}${bulanError ? " border-red-400 focus:border-red-500 focus:ring-red-500" : ""}`}
 							>
 								<option value="">—</option>
 								{BULAN_OPTIONS.map((b) => (
 									<option key={b} value={b}>{b}</option>
 								))}
 							</select>
+							{bulanError && <p className="text-xs text-red-500">{bulanError}</p>}
 						</Field>
 						<Field label="Kode surat">
 							<input
