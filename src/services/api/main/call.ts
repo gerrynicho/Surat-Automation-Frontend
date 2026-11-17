@@ -88,9 +88,12 @@ export async function patch<T>(
 	}
 }
 
-export async function del<T>(url: string): Promise<Res<T>> {
+export async function del<T>(
+	url: string,
+	params?: Record<string, unknown>,
+): Promise<Res<T>> {
 	try {
-		const response: AxiosResponse<T> = await api.delete(url);
+		const response: AxiosResponse<T> = await api.delete(url, { params });
 		return {
 			OK: true,
 			StatusCode: response.status,

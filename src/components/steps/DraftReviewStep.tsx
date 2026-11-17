@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { finalizeSurat } from "@/services/api/useDocument";
+import { updateSurat } from "@/services/api/useArsip";
 import { errorMessage } from "@/lib/errors";
 import type {
 	CreateSuratRequest,
@@ -15,6 +16,12 @@ interface Props {
 	preview: PreviewSuratResponse;
 	/** Blob URL of the preview PDF. */
 	pdfUrl: string;
+	/**
+	 * Set when an existing letter is being edited: approving then replaces that
+	 * letter instead of registering a new number. `nomorSurat` is the number it
+	 * had before the edit.
+	 */
+	edit?: { nomor: number; nomorSurat: string };
 	onApprove: (result: FinalizeSuratResponse) => void;
 	onReject: () => void;
 }
@@ -23,6 +30,7 @@ export default function DraftReviewStep({
 	form,
 	preview,
 	pdfUrl,
+	edit,
 	onApprove,
 	onReject,
 }: Props) {
@@ -32,7 +40,7 @@ export default function DraftReviewStep({
 	async function handleApprove() {
 		setError("");
 		setSaving(true);
-		const res = await finalizeSurat(form);
+		const res = edit ? await updateSurat(edit.nomor, form) : await finalizeSurat(form);
 		setSaving(false);
 		if (res.OK) {
 			onApprove(res.Kind as FinalizeSuratResponse);
@@ -41,19 +49,31 @@ export default function DraftReviewStep({
 		}
 	}
 
+	const nomorChanged = Boolean(edit) && edit?.nomorSurat !== preview.nomor_surat;
+
 	return (
 		<div className="flex flex-col gap-6">
 			<div>
 				<p className="text-sm font-medium text-gray-500 mb-1">
-					Perkiraan nomor surat
+					{edit ? "Nomor surat" : "Perkiraan nomor surat"}
 				</p>
 				<p className="font-mono text-lg font-semibold text-gray-900">
 					{preview.nomor_surat}
 				</p>
-				<p className="mt-1 text-xs text-gray-500">
-					Surat ini belum disimpan. Nomor baru dicatat setelah kamu menekan
-					&ldquo;Surat sudah benar&rdquo;.
-				</p>
+				{edit ? (
+					<p className="mt-1 text-xs text-gray-500">
+						{nomorChanged
+							? `Kode surat diganti, jadi nomornya berubah dari ${edit.nomorSurat}. Nomor urutnya tetap. `
+							: "Nomor surat tidak berubah. "}
+						Perubahan belum disimpan. Surat yang lama baru diganti setelah kamu menekan
+						&ldquo;Simpan perubahan&rdquo;.
+					</p>
+				) : (
+					<p className="mt-1 text-xs text-gray-500">
+						Surat ini belum disimpan. Nomor baru dicatat setelah kamu menekan
+						&ldquo;Surat sudah benar&rdquo;.
+					</p>
+				)}
 			</div>
 
 			{preview.warnings.length > 0 && (
@@ -111,7 +131,11 @@ export default function DraftReviewStep({
 					disabled={saving || preview.blocked}
 					className="flex-1 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
 				>
-					{saving ? "Menyimpan surat..." : "Surat sudah benar, simpan ✓"}
+					{saving
+						? "Menyimpan surat..."
+						: edit
+							? "Simpan perubahan ✓"
+							: "Surat sudah benar, simpan ✓"}
 				</button>
 				<button
 					onClick={onReject}

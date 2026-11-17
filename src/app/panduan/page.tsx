@@ -21,6 +21,7 @@ const SECTIONS = [
   { id: "buat-surat", title: "Membuat surat" },
   { id: "tinjau", title: "Memeriksa dan menyimpan surat" },
   { id: "arsip", title: "Di mana surat dan arsip tersimpan" },
+  { id: "arsip-surat", title: "Melihat, mengubah, atau menghapus surat yang sudah dibuat" },
   { id: "ubah", title: "Mengganti Ketua, tanda tangan, kop surat, atau footer" },
   { id: "error", title: "Kalau muncul pesan error" },
 ];
@@ -335,7 +336,48 @@ export default function Page() {
           </p>
         </Section>
 
-        <Section n={6} id="ubah">
+        <Section n={6} id="arsip-surat">
+          <p>
+            Buka <B>Arsip Surat</B>, lalu pilih kepengurusan. Semua surat di arsip tampil
+            dari yang paling baru, dan bisa dicari lewat nomor, perihal, atau tanggal.
+          </p>
+          <ul className="list-disc pl-5">
+            <li>
+              <B>Lihat</B>: menampilkan catatan arsip, isi surat, daftar peserta, dan
+              PDF-nya.
+            </li>
+            <li>
+              <B>Edit</B>: membuka formulir yang sudah terisi. Perbaiki isinya, tekan{" "}
+              <B>Lihat Pratinjau Surat</B>, periksa, lalu tekan <B>Simpan perubahan</B>.
+              Nomor surat tidak berubah. PDF yang lama diganti (yang lama masuk Sampah
+              Google Drive) dan baris di spreadsheet arsip ikut diperbarui.
+            </li>
+            <li>
+              <B>Hapus</B>: PDF dipindahkan ke Sampah Google Drive, dari sana masih bisa
+              dipulihkan selama 30 hari.
+            </li>
+          </ul>
+          <Note>
+            Nomor surat tidak boleh dipakai dua kali. Karena itu, kalau yang dihapus{" "}
+            <strong>bukan surat terakhir</strong>, barisnya tetap ada di spreadsheet arsip
+            dengan tanda <strong>[DIBATALKAN]</strong> dan nomornya tidak dipakai lagi.
+            Hanya kalau yang dihapus adalah <strong>surat terakhir</strong>, barisnya
+            dikosongkan dan nomornya dipakai oleh surat berikutnya.
+          </Note>
+          <p>
+            Surat bertanda <B>Hanya lihat</B> adalah surat yang dibuat sebelum ada Arsip
+            Surat, atau yang barisnya diisi langsung di spreadsheet. Aplikasi tidak
+            menyimpan isinya, jadi surat seperti itu hanya bisa diubah langsung di
+            spreadsheet arsip.
+          </p>
+          <p>
+            Isi setiap surat disimpan di tab <strong>“Data Surat”</strong> pada
+            spreadsheet arsip. Tab itu diisi otomatis oleh aplikasi; jangan diubah atau
+            dihapus, karena tanpa itu surat tidak bisa diedit lagi dari aplikasi.
+          </p>
+        </Section>
+
+        <Section n={7} id="ubah">
           <p>
             Dipakai saat Ketua berganti, tanda tangan diperbarui, atau desain kop surat
             dan footer berubah.
@@ -379,7 +421,7 @@ export default function Page() {
           </div>
         </Section>
 
-        <Section n={7} id="error">
+        <Section n={8} id="error">
           <p>
             Pesan error ditulis dengan huruf merah di dekat tombol. Cari pesanmu di
             daftar ini:

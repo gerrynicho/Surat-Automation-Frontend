@@ -7,6 +7,7 @@ import ApiKeyModal from "./ApiKeyModal";
 
 const NAV = [
 	{ href: "/", label: "Buat Surat" },
+	{ href: "/arsip", label: "Arsip Surat" },
 	{ href: "/kepengurusan", label: "Kelola Kepengurusan" },
 	{ href: "/panduan", label: "Panduan" },
 ];
@@ -18,19 +19,22 @@ interface Props {
 	 * (see `hasApiKey`). Leave it out on pages that do not call the API.
 	 */
 	hasKey?: boolean;
+	/** A wider card, for pages that show a table. */
+	wide?: boolean;
 	children: React.ReactNode;
 }
 
 /** Navigation, page card and (when needed) the password prompt shared by every page. */
-export default function PageShell({ title, hasKey = true, children }: Props) {
+export default function PageShell({ title, hasKey = true, wide = false, children }: Props) {
 	const pathname = usePathname();
 	const [unlocked, setUnlocked] = useState(hasKey);
+	const width = wide ? "max-w-5xl" : "max-w-2xl";
 
 	return (
 		<main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 sm:p-6">
 			{!unlocked && <ApiKeyModal onSuccess={() => setUnlocked(true)} />}
 
-			<nav className="mb-4 flex w-full max-w-2xl flex-wrap gap-2">
+			<nav className={`mb-4 flex w-full ${width} flex-wrap gap-2`}>
 				{NAV.map((item) => {
 					const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 					return (
@@ -50,7 +54,7 @@ export default function PageShell({ title, hasKey = true, children }: Props) {
 				})}
 			</nav>
 
-			<div className="w-full max-w-2xl rounded-2xl bg-white p-4 sm:p-8 shadow-sm border border-gray-100">
+			<div className={`w-full ${width} rounded-2xl bg-white p-4 sm:p-8 shadow-sm border border-gray-100`}>
 				<h1 className="mb-6 text-xl font-semibold text-gray-900">{title}</h1>
 				{/* Nothing that calls the API is mounted until the password is in. */}
 				{unlocked && children}

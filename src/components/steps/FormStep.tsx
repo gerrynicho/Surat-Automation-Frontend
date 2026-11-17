@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getKepengurusanList } from "@/services/api/useKepengurusan";
 import { getLatestNomorSurat } from "@/services/api/useSpreadsheet";
 import { previewSurat } from "@/services/api/useDocument";
+import { previewSuratEdit } from "@/services/api/useArsip";
 import { errorMessage } from "@/lib/errors";
 import { kepengurusanCache } from "@/lib/kepengurusanCache";
 import type {
@@ -84,8 +85,16 @@ function autoNamaDokumen(f: CreateSuratRequest): string {
 }
 
 interface Props {
-	/** Values to start from when the user comes back from the review step. */
+	/**
+	 * Values to start from: the form the user came back from the review step
+	 * with, or (when editing) the stored data of the letter.
+	 */
 	initialForm: CreateSuratRequest | null;
+	/**
+	 * Set when an existing letter is being edited. The kepengurusan is then
+	 * fixed, and the preview keeps the running number of the letter.
+	 */
+	edit?: { nomor: number; nomorSurat: string };
 	onSuccess: (form: CreateSuratRequest, preview: PreviewSuratResponse) => void;
 }
 
@@ -108,12 +117,14 @@ const emptyForm = (): CreateSuratRequest => {
 	};
 };
 
-export default function FormStep({ initialForm, onSuccess }: Props) {
+export default function FormStep({ initialForm, edit, onSuccess }: Props) {
+	const editing = Boolean(edit);
 	const [kepengurusanList, setKepengurusanList] = useState<string[]>(kepengurusanCache.get() ?? []);
 	const [loadingKepengurusan, setLoadingKepengurusan] = useState(kepengurusanCache.get() === null);
 	const [listError, setListError] = useState("");
 	const [latestSurat, setLatestSurat] = useState<SuratMetadataResponse | null>(null);
-	const [loadingLatest, setLoadingLatest] = useState(Boolean(initialForm?.nama_kepengurusan));
+	// The latest surat only matters for a new letter, which gets the number after it.
+	const [loadingLatest, setLoadingLatest] = useState(Boolean(initialForm?.nama_kepengurusan) && !editing);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
 	const [bulanError, setBulanError] = useState("");
@@ -128,7 +139,8 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 	const perihal = autoPer ? autoPerihal(form) : form.metadata.perihal;
 
 	useEffect(() => {
-		if (kepengurusanCache.get() !== null) return;
+		// The picker is not shown while editing, so the list is not needed.
+		if (editing || kepengurusanCache.get() !== null) return;
 		getKepengurusanList().then((res) => {
 			if (res.OK) {
 				const list = (res.Kind as { kepengurusan: string[] }).kepengurusan;
@@ -139,17 +151,17 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 			}
 			setLoadingKepengurusan(false);
 		});
-	}, []);
+	}, [editing]);
 
 	// Coming back from the review step: show the latest surat for the kept kepengurusan again.
 	const initialKepengurusan = initialForm?.nama_kepengurusan ?? "";
 	useEffect(() => {
-		if (!initialKepengurusan) return;
+		if (!initialKepengurusan || editing) return;
 		getLatestNomorSurat(initialKepengurusan).then((res) => {
 			setLoadingLatest(false);
 			if (res.OK) setLatestSurat(res.Kind as SuratMetadataResponse);
 		});
-	}, [initialKepengurusan]);
+	}, [initialKepengurusan, editing]);
 
 	async function handleKepengurusanChange(name: string) {
 		setForm((f) => ({ ...f, nama_kepengurusan: name }));
@@ -223,7 +235,7 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 			metadata: { ...form.metadata, perihal },
 		};
 		setSubmitting(true);
-		const res = await previewSurat(toSend);
+		const res = edit ? await previewSuratEdit(edit.nomor, toSend) : await previewSurat(toSend);
 		setSubmitting(false);
 		if (res.OK) {
 			onSuccess(toSend, res.Kind as PreviewSuratResponse);
@@ -237,7 +249,23 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 			{/* Kepengurusan */}
 			<div className="flex flex-col gap-1.5">
 				<label className="text-sm font-medium text-gray-700">Kepengurusan</label>
-				{loadingKepengurusan ? (
+				{edit ? (
+					<>
+						<p className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
+							{form.nama_kepengurusan}
+						</p>
+						<div className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+							<p>
+								Mengubah surat{" "}
+								<span className="font-mono font-semibold text-gray-900">{edit.nomorSurat}</span>
+							</p>
+							<p className="mt-1 text-xs text-gray-500">
+								Nomor urut dan kepengurusannya tetap. Kalau kode surat diganti, hanya huruf
+								kode di nomor surat yang ikut berubah.
+							</p>
+						</div>
+					</>
+				) : loadingKepengurusan ? (
 					<div className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 animate-pulse">
 						<div className="h-4 w-48 rounded bg-gray-300" />
 					</div>
@@ -255,17 +283,19 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 					</select>
 				)}
 				{listError && <p className="text-sm text-red-600">{listError}</p>}
-				<p className="text-xs text-gray-500">
-					Kepengurusanmu belum ada di daftar?{" "}
-					<Link href="/kepengurusan" className="underline hover:text-gray-800">
-						Buat di Kelola Kepengurusan
-					</Link>
-					. Bingung cara mengisinya?{" "}
-					<Link href="/panduan" className="underline hover:text-gray-800">
-						Baca Panduan
-					</Link>
-					.
-				</p>
+				{!edit && (
+					<p className="text-xs text-gray-500">
+						Kepengurusanmu belum ada di daftar?{" "}
+						<Link href="/kepengurusan" className="underline hover:text-gray-800">
+							Buat di Kelola Kepengurusan
+						</Link>
+						. Bingung cara mengisinya?{" "}
+						<Link href="/panduan" className="underline hover:text-gray-800">
+							Baca Panduan
+						</Link>
+						.
+					</p>
+				)}
 			</div>
 
 			{/* Latest surat preview */}
@@ -401,7 +431,10 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 						/>
 					</Field>
 
-					<Field label="Hari / tanggal kegiatan" hint="Terisi hari ini sebagai contoh. Ganti dengan hari dan tanggal kegiatan.">
+					<Field
+						label="Hari / tanggal kegiatan"
+						hint={edit ? undefined : "Terisi hari ini sebagai contoh. Ganti dengan hari dan tanggal kegiatan."}
+					>
 						<input
 							type="text"
 							value={form.data.HARITANGGAL}
@@ -484,7 +517,9 @@ export default function FormStep({ initialForm, onSuccess }: Props) {
 						{submitting ? "Menyusun surat..." : "Lihat Pratinjau Surat"}
 					</button>
 					<p className="-mt-3 text-xs text-gray-500">
-						Belum ada yang disimpan di langkah ini. Kamu bisa memeriksa suratnya dulu.
+						{edit
+							? "Perubahan belum disimpan di langkah ini. Kamu bisa memeriksa suratnya dulu."
+							: "Belum ada yang disimpan di langkah ini. Kamu bisa memeriksa suratnya dulu."}
 					</p>
 				</>
 			)}
