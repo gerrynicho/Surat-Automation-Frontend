@@ -260,8 +260,8 @@ export default function FormStep({ initialForm, edit, onSuccess }: Props) {
 								<span className="font-mono font-semibold text-gray-900">{edit.nomorSurat}</span>
 							</p>
 							<p className="mt-1 text-xs text-gray-500">
-								Nomor urut dan kepengurusannya tetap. Kalau kode surat diganti, hanya huruf
-								kode di nomor surat yang ikut berubah.
+								Nomor urut dan kepengurusannya tetap. Kalau kode surat atau bulan diganti,
+								hanya bagian itu di nomor surat yang ikut berubah.
 							</p>
 						</div>
 					</>
@@ -336,7 +336,7 @@ export default function FormStep({ initialForm, edit, onSuccess }: Props) {
 					</Field>
 
 					<div className="grid grid-cols-2 gap-4">
-						<Field label="Bulan" hint="Bulan pengajuan dalam angka Romawi. Terisi sendiri dari tanggal pengajuan.">
+						<Field label="Bulan" hint="Bulan pengajuan dalam angka Romawi, ikut tertulis di nomor surat. Terisi sendiri dari tanggal pengajuan.">
 							<select
 								value={form.metadata.bulan}
 								onChange={(e) => setMeta("bulan", e.target.value)}

@@ -44,7 +44,7 @@ const FORM_FIELDS: { name: string; meaning: string; example: string }[] = [
   },
   {
     name: "Bulan",
-    meaning: "Bulan pengajuan dalam angka Romawi. Terisi sendiri setelah tanggal pengajuan diketik.",
+    meaning: "Bulan pengajuan dalam angka Romawi, ikut tertulis di nomor surat (mis. 006/B/TPKB-ITS/VI/2026). Terisi sendiri setelah tanggal pengajuan diketik.",
     example: "VI",
   },
   {
@@ -349,7 +349,8 @@ export default function Page() {
             <li>
               <B>Edit</B>: membuka formulir yang sudah terisi. Perbaiki isinya, tekan{" "}
               <B>Lihat Pratinjau Surat</B>, periksa, lalu tekan <B>Simpan perubahan</B>.
-              Nomor surat tidak berubah. PDF yang lama diganti (yang lama masuk Sampah
+              Nomor urut tidak berubah (bagian kode dan bulan di nomor surat mengikuti
+              isian yang baru). PDF yang lama diganti (yang lama masuk Sampah
               Google Drive) dan baris di spreadsheet arsip ikut diperbarui.
             </li>
             <li>

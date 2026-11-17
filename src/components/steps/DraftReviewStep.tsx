@@ -63,7 +63,7 @@ export default function DraftReviewStep({
 				{edit ? (
 					<p className="mt-1 text-xs text-gray-500">
 						{nomorChanged
-							? `Kode surat diganti, jadi nomornya berubah dari ${edit.nomorSurat}. Nomor urutnya tetap. `
+							? `Kode surat atau bulan diganti, jadi nomornya berubah dari ${edit.nomorSurat}. Nomor urutnya tetap. `
 							: "Nomor surat tidak berubah. "}
 						Perubahan belum disimpan. Surat yang lama baru diganti setelah kamu menekan
 						&ldquo;Simpan perubahan&rdquo;.
