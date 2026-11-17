@@ -13,17 +13,46 @@ export interface SuratMetadataResponse {
 	position: number;
 }
 
-export interface CreateSuratResponse {
-	success: boolean;
+export interface PreviewSuratResponse {
+	/** Predicted number. Nothing is saved until the letter is finalized. */
 	nomor_surat: string;
-	doc_name: string;
-	doc_url: string;
+	pdf_base64: string;
+	warnings: string[];
+	/** True when the letter cannot be finalized yet (Ketua data, TTD or stempel missing). */
+	blocked: boolean;
 }
 
-export interface ExportPDFResponse {
+export interface FinalizeSuratResponse {
 	success: boolean;
+	nomor_surat: string;
 	file_name: string;
 	url: string;
+}
+
+export interface KetuaConfig {
+	jabatan: string;
+	ketua_nama: string;
+	ketua_nrp: string;
+}
+
+export type ImageSlot = "ttd" | "header" | "footer" | "stempel";
+
+export interface KepengurusanImage {
+	/** "own" = set for this kepengurusan, "default" = shared fallback */
+	source: "own" | "default";
+	data_url: string;
+}
+
+export interface KepengurusanDetailResponse {
+	nama: string;
+	config: KetuaConfig | null;
+	images: Record<ImageSlot, KepengurusanImage | null>;
+}
+
+export interface SaveKepengurusanResponse {
+	success: boolean;
+	nama: string;
+	created: boolean;
 }
 
 // Request bodies
@@ -50,9 +79,4 @@ export interface CreateSuratRequest {
 		ACARAYANGMINTAIZIN: string;
 	};
 	participants: Participant[];
-}
-
-export interface FileActionRequest {
-	nama_kepengurusan: string;
-	nama_file: string;
 }

@@ -40,7 +40,7 @@ export default function ApiKeyModal({ onSuccess }: Props) {
 						onChange={(e) => setKey(e.target.value)}
 						placeholder="Password"
 						autoFocus
-						className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-gray-700 focus:ring-1 focus:ring-gray-700"
+						className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-gray-700 focus:ring-1 focus:ring-gray-700"
 					/>
 					{error && <p className="text-sm text-red-600">{error}</p>}
 					<button

@@ -1,9 +1,6 @@
 import SuratFormFlow from "@/components/SuratFormFlow";
+import { hasApiKey } from "@/lib/hasApiKey";
 
-export default function Page() {
-  return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6">
-      <SuratFormFlow />
-    </main>
-  );
+export default async function Page() {
+  return <SuratFormFlow hasKey={await hasApiKey()} />;
 }

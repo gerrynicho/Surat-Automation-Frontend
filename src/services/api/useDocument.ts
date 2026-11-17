@@ -4,21 +4,22 @@ import { post } from "./main/call";
 import { ENDPOINTS } from "./main/endpoint";
 import type {
 	CreateSuratRequest,
-	CreateSuratResponse,
-	FileActionRequest,
-	ExportPDFResponse,
+	FinalizeSuratResponse,
+	PreviewSuratResponse,
 } from "@/types/api";
 
-export async function createSurat(body: CreateSuratRequest) {
-	return post<CreateSuratResponse>(
-		ENDPOINTS.suratCreate,
+/** Builds the letter as a PDF for review. Nothing is saved yet. */
+export async function previewSurat(body: CreateSuratRequest) {
+	return post<PreviewSuratResponse>(
+		ENDPOINTS.suratPreview,
 		body as unknown as Record<string, unknown>,
 	);
 }
 
-export async function exportPDF(body: FileActionRequest) {
-	return post<ExportPDFResponse>(
-		ENDPOINTS.suratExportPDF,
+/** Registers the nomor surat and saves the final PDF to Google Drive. */
+export async function finalizeSurat(body: CreateSuratRequest) {
+	return post<FinalizeSuratResponse>(
+		ENDPOINTS.suratFinalize,
 		body as unknown as Record<string, unknown>,
 	);
 }

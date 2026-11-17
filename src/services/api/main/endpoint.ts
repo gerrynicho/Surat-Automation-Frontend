@@ -5,7 +5,8 @@ const BASE = ENV.URI.BASE_URL;
 export const ENDPOINTS = {
 	ping: `${BASE}/ping`,
 	kepengurusan: `${BASE}/kepengurusan`,
+	kepengurusanDetail: `${BASE}/kepengurusan/detail`,
 	suratLatest: `${BASE}/surat/latest`,
-	suratCreate: `${BASE}/surat/create`,
-	suratExportPDF: `${BASE}/surat/export-pdf`,
+	suratPreview: `${BASE}/surat/preview`,
+	suratFinalize: `${BASE}/surat/finalize`,
 };

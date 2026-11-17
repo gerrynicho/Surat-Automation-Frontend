@@ -1,17 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getKepengurusanList } from "@/services/api/useKepengurusan";
 import { getLatestNomorSurat } from "@/services/api/useSpreadsheet";
-import { createSurat } from "@/services/api/useDocument";
+import { previewSurat } from "@/services/api/useDocument";
+import { errorMessage } from "@/lib/errors";
+import { kepengurusanCache } from "@/lib/kepengurusanCache";
 import type {
 	CreateSuratRequest,
-	CreateSuratResponse,
 	Participant,
+	PreviewSuratResponse,
 	SuratMetadataResponse,
 } from "@/types/api";
-
-let kepengurusanCache: string[] | null = null;
 
 const BULAN_OPTIONS = [
 	"I", "II", "III", "IV", "V", "VI",
@@ -36,51 +37,122 @@ function detectMonthFromTanggal(tanggal: string): string | null {
 	return null;
 }
 
+// ── Defaults for a new letter ───────────────────────────────────────────────
+// Change these to change what the form starts with. Based on the 2026 arsip,
+// where every surat izin used kode B (luar TPKB, masih di ITS).
+const DEFAULTS = {
+	kode: "B",
+	tujuan: "Direktorat Kemahasiswaan",
+	its: true,
+};
+
+const NAMA_BULAN = [
+	"Januari", "Februari", "Maret", "April", "Mei", "Juni",
+	"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+/** Today's date in Surabaya, written the way the letters write it. */
+function today() {
+	// en-CA formats as YYYY-MM-DD, which is easy to split.
+	const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" })
+		.format(new Date())
+		.split("-")
+		.map(Number);
+	const hari = NAMA_HARI[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+	const tanggal = `${d} ${NAMA_BULAN[m - 1]} ${y}`;
+	return { tanggal, hariTanggal: `${hari}, ${tanggal}`, bulan: BULAN_OPTIONS[m - 1] };
+}
+
+// "Perihal" and "Nama dokumen" fill themselves in from the kegiatan and the
+// participants, following the naming used in the arsip, until the user edits them.
+function firstNama(f: CreateSuratRequest): string {
+	return f.participants[0]?.nama.trim() ?? "";
+}
+
+function autoPerihal(f: CreateSuratRequest): string {
+	const nama = firstNama(f);
+	const more = f.participants.filter((p) => p.nama.trim()).length > 1 ? " dkk." : "";
+	return nama ? `Surat Izin Kegiatan -  ${nama}${more}` : "Surat Izin Kegiatan";
+}
+
+function autoNamaDokumen(f: CreateSuratRequest): string {
+	const kegiatan = f.data.NAMAKEGIATAN.trim();
+	return [kegiatan ? `Surat Izin ${kegiatan}` : "Surat Izin", firstNama(f)]
+		.filter(Boolean)
+		.join(" - ");
+}
+
 interface Props {
-	onSuccess: (result: CreateSuratResponse) => void;
-	onKepengurusanChange: (name: string) => void;
+	/** Values to start from when the user comes back from the review step. */
+	initialForm: CreateSuratRequest | null;
+	onSuccess: (form: CreateSuratRequest, preview: PreviewSuratResponse) => void;
 }
 
 const emptyParticipant = (): Participant => ({ nama: "", nrp: "", jurusan: "" });
 
-export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
-	const [kepengurusanList, setKepengurusanList] = useState<string[]>(kepengurusanCache ?? []);
-	const [loadingKepengurusan, setLoadingKepengurusan] = useState(kepengurusanCache === null);
+const emptyForm = (): CreateSuratRequest => {
+	const now = today();
+	return {
+		nama_kepengurusan: "",
+		new_name: "",
+		metadata: { bulan: now.bulan, tanggal_pengajuan: now.tanggal, perihal: "", kode: DEFAULTS.kode },
+		data: {
+			TUJUAN: DEFAULTS.tujuan,
+			ITSORNO: DEFAULTS.its,
+			NAMAKEGIATAN: "",
+			HARITANGGAL: now.hariTanggal,
+			ACARAYANGMINTAIZIN: "",
+		},
+		participants: [emptyParticipant()],
+	};
+};
+
+export default function FormStep({ initialForm, onSuccess }: Props) {
+	const [kepengurusanList, setKepengurusanList] = useState<string[]>(kepengurusanCache.get() ?? []);
+	const [loadingKepengurusan, setLoadingKepengurusan] = useState(kepengurusanCache.get() === null);
+	const [listError, setListError] = useState("");
 	const [latestSurat, setLatestSurat] = useState<SuratMetadataResponse | null>(null);
-	const [loadingLatest, setLoadingLatest] = useState(false);
+	const [loadingLatest, setLoadingLatest] = useState(Boolean(initialForm?.nama_kepengurusan));
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
 	const [bulanError, setBulanError] = useState("");
 
-	const [form, setForm] = useState<CreateSuratRequest>({
-		nama_kepengurusan: "",
-		new_name: "",
-		metadata: { bulan: "", tanggal_pengajuan: "", perihal: "", kode: "" },
-		data: {
-			TUJUAN: "",
-			ITSORNO: false,
-			NAMAKEGIATAN: "",
-			HARITANGGAL: "",
-			ACARAYANGMINTAIZIN: "",
-		},
-		participants: [emptyParticipant()],
-	});
+	const [form, setForm] = useState<CreateSuratRequest>(() => initialForm ?? emptyForm());
+	// While true, the field follows the kegiatan and participants. Typing in it turns this off.
+	// Coming back from review, a value that still matches the automatic one stays automatic.
+	const [autoNama, setAutoNama] = useState(() => !initialForm || initialForm.new_name === autoNamaDokumen(initialForm));
+	const [autoPer, setAutoPer] = useState(() => !initialForm || initialForm.metadata.perihal === autoPerihal(initialForm));
+
+	const namaDokumen = autoNama ? autoNamaDokumen(form) : form.new_name;
+	const perihal = autoPer ? autoPerihal(form) : form.metadata.perihal;
 
 	useEffect(() => {
-		if (kepengurusanCache !== null) return;
+		if (kepengurusanCache.get() !== null) return;
 		getKepengurusanList().then((res) => {
 			if (res.OK) {
 				const list = (res.Kind as { kepengurusan: string[] }).kepengurusan;
-				kepengurusanCache = list;
+				kepengurusanCache.set(list);
 				setKepengurusanList(list);
+			} else {
+				setListError(errorMessage(res.Kind, "Daftar kepengurusan gagal dimuat. Muat ulang halaman ini."));
 			}
 			setLoadingKepengurusan(false);
 		});
 	}, []);
 
+	// Coming back from the review step: show the latest surat for the kept kepengurusan again.
+	const initialKepengurusan = initialForm?.nama_kepengurusan ?? "";
+	useEffect(() => {
+		if (!initialKepengurusan) return;
+		getLatestNomorSurat(initialKepengurusan).then((res) => {
+			setLoadingLatest(false);
+			if (res.OK) setLatestSurat(res.Kind as SuratMetadataResponse);
+		});
+	}, [initialKepengurusan]);
+
 	async function handleKepengurusanChange(name: string) {
 		setForm((f) => ({ ...f, nama_kepengurusan: name }));
-		onKepengurusanChange(name);
 		setLatestSurat(null);
 		if (!name) return;
 		setLoadingLatest(true);
@@ -145,14 +217,18 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 			setBulanError(`Bulan tidak sesuai — tanggal pengajuan mengandung "${expected}" tapi bulan dipilih ${form.metadata.bulan}`);
 			return;
 		}
+		const toSend: CreateSuratRequest = {
+			...form,
+			new_name: namaDokumen,
+			metadata: { ...form.metadata, perihal },
+		};
 		setSubmitting(true);
-		const res = await createSurat(form);
+		const res = await previewSurat(toSend);
 		setSubmitting(false);
 		if (res.OK) {
-			onSuccess(res.Kind as CreateSuratResponse);
+			onSuccess(toSend, res.Kind as PreviewSuratResponse);
 		} else {
-			const kind = res.Kind as { Message?: string; error?: string };
-			setError(kind.Message || kind.error || "Terjadi kesalahan.");
+			setError(errorMessage(res.Kind, "Surat gagal dibuat. Coba lagi."));
 		}
 	}
 
@@ -178,6 +254,18 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						))}
 					</select>
 				)}
+				{listError && <p className="text-sm text-red-600">{listError}</p>}
+				<p className="text-xs text-gray-500">
+					Kepengurusanmu belum ada di daftar?{" "}
+					<Link href="/kepengurusan" className="underline hover:text-gray-800">
+						Buat di Kelola Kepengurusan
+					</Link>
+					. Bingung cara mengisinya?{" "}
+					<Link href="/panduan" className="underline hover:text-gray-800">
+						Baca Panduan
+					</Link>
+					.
+				</p>
 			</div>
 
 			{/* Latest surat preview */}
@@ -187,28 +275,38 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 			{latestSurat && (
 				<div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
 					<p className="mb-1 font-medium text-gray-800">Surat terakhir</p>
-					<p>Nomor: <span className="font-mono font-semibold text-gray-900">{latestSurat.legal}</span></p>
-					<p>Perihal: {latestSurat.perihal}</p>
-					<p>Tanggal: {latestSurat.tgl}</p>
+					{latestSurat.legal ? (
+						<>
+							<p>Nomor: <span className="font-mono font-semibold text-gray-900">{latestSurat.legal}</span></p>
+							<p>Perihal: {latestSurat.perihal}</p>
+							<p>Tanggal: {latestSurat.tgl}</p>
+						</>
+					) : (
+						<p>Belum ada surat. Surat pertama akan bernomor 001.</p>
+					)}
 				</div>
 			)}
 
 			{/* Only show the rest of the form once a kepengurusan is selected */}
 			{form.nama_kepengurusan && (
 				<>
-					<Field label="Nama dokumen (new_name)">
+					<Field label="Nama dokumen" hint="Menjadi nama file PDF di Google Drive.">
 						<input
 							type="text"
-							value={form.new_name}
-							onChange={(e) => setForm((f) => ({ ...f, new_name: e.target.value }))}
+							value={namaDokumen}
+							onChange={(e) => {
+								setAutoNama(false);
+								setForm((f) => ({ ...f, new_name: e.target.value }));
+							}}
 							required
 							placeholder="cth. Surat Izin Baksos - Kevin Hartanto"
 							className={inputCls}
 						/>
+						<AutoNote auto={autoNama} onReset={() => setAutoNama(true)} />
 					</Field>
 
 					<div className="grid grid-cols-2 gap-4">
-						<Field label="Bulan">
+						<Field label="Bulan" hint="Bulan pengajuan dalam angka Romawi. Terisi sendiri dari tanggal pengajuan.">
 							<select
 								value={form.metadata.bulan}
 								onChange={(e) => setMeta("bulan", e.target.value)}
@@ -222,7 +320,7 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 							</select>
 							{bulanError && <p className="text-xs text-red-500">{bulanError}</p>}
 						</Field>
-						<Field label="Kode surat">
+						<Field label="Kode surat" hint="A = tujuan internal TPKB, B = luar TPKB tapi masih ITS, C = luar ITS.">
 							<input
 								type="text"
 								value={form.metadata.kode}
@@ -235,7 +333,7 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						</Field>
 					</div>
 
-					<Field label="Tanggal pengajuan">
+					<Field label="Tanggal pengajuan" hint="Tanggal surat, ditulis lengkap. Muncul di kanan atas surat.">
 						<input
 							type="text"
 							value={form.metadata.tanggal_pengajuan}
@@ -246,18 +344,22 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						/>
 					</Field>
 
-					<Field label="Perihal">
+					<Field label="Perihal" hint="Keterangan surat untuk catatan arsip di spreadsheet. Tidak dicetak di surat.">
 						<input
 							type="text"
-							value={form.metadata.perihal}
-							onChange={(e) => setMeta("perihal", e.target.value)}
+							value={perihal}
+							onChange={(e) => {
+								setAutoPer(false);
+								setMeta("perihal", e.target.value);
+							}}
 							required
-							placeholder="Surat Izin Kegiatan Bakti Sosial TPKB ITS"
+							placeholder="Surat Izin Kegiatan Kevin Hartanto"
 							className={inputCls}
 						/>
+						<AutoNote auto={autoPer} onReset={() => setAutoPer(true)} />
 					</Field>
 
-					<Field label="Tujuan surat">
+					<Field label="Tujuan surat" hint="Jabatan atau nama penerima, ditulis setelah &ldquo;Yth.&rdquo;">
 						<input
 							type="text"
 							value={form.data.TUJUAN}
@@ -280,8 +382,11 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 								ITS (Institut Teknologi Sepuluh Nopember)
 							</label>
 						</div>
-						<p className="mt-1 text-xs text-gray-400">
-							{form.data.ITSORNO ? "Institut Teknologi Sepuluh Nopember" : "Di tempat"}
+						<p className="mt-1 text-xs text-gray-500">
+							Baris di bawah nama penerima akan tertulis:{" "}
+							<span className="font-medium">
+								{form.data.ITSORNO ? "Institut Teknologi Sepuluh Nopember" : "Di tempat"}
+							</span>
 						</p>
 					</Field>
 
@@ -296,7 +401,7 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						/>
 					</Field>
 
-					<Field label="Hari / tanggal kegiatan">
+					<Field label="Hari / tanggal kegiatan" hint="Terisi hari ini sebagai contoh. Ganti dengan hari dan tanggal kegiatan.">
 						<input
 							type="text"
 							value={form.data.HARITANGGAL}
@@ -307,7 +412,8 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						/>
 					</Field>
 
-					<Field label="Acara yang minta izin">
+					<Field label="Acara yang minta izin" hint="Kelas atau acara yang tidak bisa dihadiri peserta.">
+
 						<input
 							type="text"
 							value={form.data.ACARAYANGMINTAIZIN}
@@ -368,18 +474,41 @@ export default function FormStep({ onSuccess, onKepengurusanChange }: Props) {
 						</button>
 					</div>
 
-					{error && <p className="text-sm text-red-600">{error}</p>}
+					{error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
 					<button
 						type="submit"
 						disabled={submitting}
 						className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
 					>
-						{submitting ? "Membuat dokumen..." : "Buat Surat"}
+						{submitting ? "Menyusun surat..." : "Lihat Pratinjau Surat"}
 					</button>
+					<p className="-mt-3 text-xs text-gray-500">
+						Belum ada yang disimpan di langkah ini. Kamu bisa memeriksa suratnya dulu.
+					</p>
 				</>
 			)}
 		</form>
+	);
+}
+
+/** Says whether an automatic field is still automatic, with a way back after editing it. */
+function AutoNote({ auto, onReset }: { auto: boolean; onReset: () => void }) {
+	if (auto) {
+		return (
+			<p className="text-xs text-gray-500">
+				Terisi otomatis dari nama kegiatan dan peserta. Boleh diubah.
+			</p>
+		);
+	}
+	return (
+		<button
+			type="button"
+			onClick={onReset}
+			className="self-start text-xs text-gray-500 underline hover:text-gray-800"
+		>
+			Isi otomatis lagi
+		</button>
 	);
 }
 
@@ -388,15 +517,18 @@ const inputCls =
 
 function Field({
 	label,
+	hint,
 	children,
 }: {
 	label: string;
+	hint?: string;
 	children: React.ReactNode;
 }) {
 	return (
 		<div className="flex flex-col gap-1.5">
 			<label className="text-sm font-medium text-gray-700">{label}</label>
 			{children}
+			{hint && <p className="text-xs text-gray-500">{hint}</p>}
 		</div>
 	);
 }
